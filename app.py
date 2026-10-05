@@ -21,7 +21,7 @@ if not st.session_state.logado:
         st.subheader("Cadastro de Usuário")
         st.write("Preencha os campos abaixo para criar uma nova conta.")
         nome = st.text_input("Nome")
-        email = st.text_input("Email, key="login_email_unico")
+        email = st.text_input("Email", key="login_email_unico")
         senha = st.text_input("Senha", type="password", key="login_senha_unico")
         if st.button("Cadastrar"):
             if not email or not senha or not nome:
