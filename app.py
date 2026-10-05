@@ -1,49 +1,66 @@
 import streamlit as st
+
 if "usuarios" not in st.session_state:
     st.session_state.usuarios = {}
+
 if "logado" not in st.session_state:
     st.session_state.logado = False
-st.title("Bem vinda, realize o seu login")
+    st.session_state.usuario_logado = ""
+
+st.title("🚀 EvoluiAI - Parte 1.2")
 
 if not st.session_state.logado:
-    aba1,aba2,aba3 = st.tabs(["Entrar","Cadastrar","Esqueci minha senha"])
+    aba1, aba2, aba3 = st.tabs(["Entrar", "Cadastrar", "Esqueci / Trocar Senha"])
 
     with aba1:
-        user = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
+        st.subheader("Entrar")
+        email_login = st.text_input("Seu E-MAIL", key="login_email")
+        senha_login = st.text_input("Sua Senha", type="password", key="login_senha")
         if st.button("Entrar"):
-            if user in st.session_state.usuarios and st.session_state.usuarios[user] == senha:
+            if email_login in st.session_state.usuarios and st.session_state.usuarios[email_login]["senha"] == senha_login:
                 st.session_state.logado = True
-                st.success("Login realizado com sucesso!")
+                st.session_state.usuario_logado = email_login
+                st.rerun()
             else:
-                st.error("Usuário ou senha incorretos.")
+                st.error("E-mail ou senha incorreta.")
+
     with aba2:
-        st.subheader("Cadastro de Usuário")
-        st.write("Preencha os campos abaixo para criar uma nova conta.")
-        nome = st.text_input("Nome")
-        email = st.text_input("Email", key="login_email_unico")
-        senha = st.text_input("Senha", type="password", key="login_senha_unico")
-        if st.button("Cadastrar"):
-            if not email or not senha or not nome:
-                st.warning("Por favor, preencha nome, email e senha.")
-            elif email in st.session_state.usuarios:
-                st.warning("Este email já está cadastrado. Por favor, escolha outro.")
+        st.subheader("Criar sua conta")
+        nome = st.text_input("Seu nome completo", key="cad_nome")
+        email_cad = st.text_input("Seu e-mail (vai ser seu login)", key="cad_email")
+        senha_cad = st.text_input("Crie uma senha", type="password", key="cad_senha")
+        
+        if st.button("Cadastrar agora"):
+            if not nome or not email_cad or not senha_cad:
+                st.warning("Preenche tudo!")
+            elif email_cad in st.session_state.usuarios:
+                st.warning("Esse e-mail já existe. Realize o seu login.")
             else:
-                st.session_state.usuarios[email] = {"nome": nome, "senha": senha}
-                st.success("Cadastro realizado com sucesso! Agora você pode fazer login.")
+                st.session_state.usuarios[email_cad] = {"nome": nome, "senha": senha_cad}
+                st.success(f"Pronto, {nome}! Agora faz login na aba Entrar.")
+
     with aba3:
-        st.subheader("Recuperação de Senha")
-        st.write("Digite seu email para recuperar sua senha.")
-        email_recuperacao = st.text_input("Email de recuperação")
-        if st.button("Recuperar Senha"):
-            if email_recuperacao in st.session_state.usuarios:
-                st.success(f"Senha recuperada com sucesso! Sua senha é: {st.session_state.usuarios[email_recuperacao]['senha']}")
-            else:
-                st.error("Email não encontrado. Por favor, verifique o email digitado.")
+        st.subheader("Trocar sua senha")
+        email_rec = st.text_input("Qual seu e-mail?", key="rec_email")
+        if email_rec in st.session_state.usuarios:
+            st.write(f"Olá, {st.session_state.usuarios[email_rec]['nome']}!")
+            nova_senha = st.text_input("Digite sua NOVA senha", type="password", key="nova_senha")
+            if st.button("Salvar nova senha"):
+                if nova_senha:
+                    st.session_state.usuarios[email_rec]["senha"] = nova_senha
+                    st.success("Senha trocada com sucesso! Agora é só entrar.")
+                else:
+                    st.warning("Digite a nova senha")
+        else:
+            if email_rec != "":
+                st.error("E-mail não encontrado")
 
 else:
-    st.write("Bem-vindo! Você está logado.")
-    st.success(f"Logado como: {user} ({st.session_state.usuarios[user]['nome']})")
-    if st.button("Sair"):
+    dados = st.session_state.usuarios[st.session_state.usuario_logado]
+    st.success(f"Bem-vindo, {dados['nome']}!")
+    st.write(f"Seu e-mail: {st.session_state.usuario_logado}")
+    st.balloons()
+    
+    if st.button("Sair da conta"):
         st.session_state.logado = False
         st.rerun()
