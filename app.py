@@ -6,7 +6,7 @@ if "logado" not in st.session_state:
 st.title("Bem vinda, realize o seu login")
 
 if not st.session_state.logado:
-    aba1,aba2,aba3 = st.tabs(["Entrar","Cadastrar,","Esqueci minha senha"])
+    aba1,aba2,aba3 = st.tabs(["Entrar","Cadastrar","Esqueci minha senha"])
 
     with aba1:
         user = st.text_input("Usuário")
