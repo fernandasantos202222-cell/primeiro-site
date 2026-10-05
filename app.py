@@ -3,7 +3,7 @@ if "usuarios" not in st.session_state:
     st.session_state.usuarios = {}
 if "logado" not in st.session_state:
     st.session_state.logado = False
-st.title("EvoluiAI - Parte 1: Login")
+st.title("Bem vinda, faça o seu Login")
 
 if not st.session_state.logado:
     aba1,aba2 = st.tabs(["Entrar","Cadastrar"])
