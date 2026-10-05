@@ -10,7 +10,7 @@ if "logado" not in st.session_state:
 st.title("🚀 EvoluiAI - Parte 1.2")
 
 if not st.session_state.logado:
-    aba1, aba2, aba3 = st.tabs(["Entrar", "Cadastrar", "Esqueci / Trocar Senha"])
+    aba1, aba2, aba3 = st.tabs(["Entrar", "Cadastrar", "Esqueci senha"])
 
     with aba1:
         st.subheader("Entrar")
