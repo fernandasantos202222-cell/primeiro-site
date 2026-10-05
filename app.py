@@ -38,5 +38,6 @@ if not st.session_state.logado:
 else:
     st.write("Bem-vindo! Você está logado.")
     if st.button("Sair"):
-        st.session _state.logado = False
+        st.session_state.logado = False
         st.experimental_rerun()
+
