@@ -1,7 +1,6 @@
 import streamlit as st
 import json, os
 from datetime import date, datetime, timedelta
-import random
 
 ARQUIVO="banco_usuarios.json"
 def carregar():
@@ -21,20 +20,20 @@ if "logado" not in st.session_state:
     st.session_state.pagina="Início"
     st.session_state.timer_inicio=None
     st.session_state.materia_em_estudo=None
+    st.session_state.foco_materia=None
 
 def garantir(uid):
     u=st.session_state.usuarios[uid]
     u.setdefault("nome","")
-    u.setdefault("perfil_academico",{"nivel":"Ensino Médio","status":"Em andamento"})
     u.setdefault("areas",{"Estudos":{"objetivo":"","materias":{}}})
     if "Estudos" not in u["areas"]: u["areas"]["Estudos"]={"objetivo":"","materias":{}}
     u["areas"]["Estudos"].setdefault("materias",{})
     u.setdefault("cronograma",[])
     u.setdefault("progresso",{})
-    u.setdefault("resumos",{})
-    u.setdefault("streak",0)
     u.setdefault("tempo_total_mes",0)
-    u.setdefault("chat_duvidas",[]) # novo
+    u.setdefault("chat_duvidas",[])
+    u.setdefault("streak",0)
+    u.setdefault("foco_materia",None)
 
 st.set_page_config(page_title="EvoluiAI", layout="centered")
 
@@ -42,28 +41,31 @@ if not st.session_state.logado:
     st.title("🚀 EvoluiAI")
     t1,t2=st.tabs(["Entrar","Cadastrar"])
     with t1:
-        u=st.text_input("Usuário",key="l1")
-        s=st.text_input("Senha",type="password",key="l2")
+        u=st.text_input("Usuário")
+        s=st.text_input("Senha",type="password")
         if st.button("Entrar"):
             if u in st.session_state.usuarios and st.session_state.usuarios[u]["senha"]==s:
                 garantir(u); salvar()
                 st.session_state.logado=True; st.session_state.usuario_logado=u; st.rerun()
-            else: st.error("Errado")
     with t2:
-        nome=st.text_input("Nome",key="c1")
-        user=st.text_input("Usuário",key="c5")
-        senha=st.text_input("Senha",type="password",key="c6")
+        nome=st.text_input("Nome")
+        user=st.text_input("Usuário novo")
+        senha=st.text_input("Senha nova",type="password")
         if st.button("Cadastrar"):
-            st.session_state.usuarios[user]={"nome":nome,"senha":senha,"perfil_academico":{"nivel":"Ensino Médio","status":"Em andamento"},"areas":{"Estudos":{"objetivo":"","materias":{}}},"cronograma":[],"progresso":{},"resumos":{},"streak":0,"tempo_total_mes":0,"chat_duvidas":[]}
-            salvar(); st.success("Cadastrado!")
+            st.session_state.usuarios[user]={"nome":nome,"senha":senha,"areas":{"Estudos":{"objetivo":"","materias":{}}},"cronograma":[],"progresso":{},"tempo_total_mes":0,"chat_duvidas":[],"streak":0,"foco_materia":None}
+            salvar(); st.success("Cadastrado! Entra.")
 else:
     garantir(st.session_state.usuario_logado)
-    USUARIOS = st.session_state.usuarios
-    usuario = USUARIOS[st.session_state.usuario_logado]
-    LOGADO = st.session_state.usuario_logado
+    USUARIOS=st.session_state.usuarios
+    usuario=USUARIOS[st.session_state.usuario_logado]
+    LOGADO=st.session_state.usuario_logado
 
     with st.sidebar:
-        st.write(f"**{usuario['nome']}** - 🔥 {usuario.get('streak',0)} dias")
+        st.write(f"**{usuario['nome']}** 🔥 {usuario['streak']}")
+        if usuario.get("foco_materia"):
+            st.info(f"🎯 Foco: {usuario['foco_materia']}")
+            if st.button("Sair do foco"):
+                USUARIOS[LOGADO]["foco_materia"]=None; salvar(); st.rerun()
         if st.button("🏠 Início",use_container_width=True): st.session_state.pagina="Início"; st.rerun()
         if st.button("🎓 Acadêmico",use_container_width=True): st.session_state.pagina="Acadêmico"; st.rerun()
         if st.button("⚙️ Perfil",use_container_width=True): st.session_state.pagina="Config"; st.rerun()
@@ -75,218 +77,268 @@ else:
         # LEMBRETE PROVA
         for mat, dados in usuario["areas"]["Estudos"]["materias"].items():
             try:
-                data_prova = date.fromisoformat(dados.get("dia_prova",""))
-                dias_falta = (data_prova - date.today()).days
-                if 0 <= dias_falta <= 7:
-                    st.warning(f"⚠️ Prova de **{mat}** em **{dias_falta} dias** ({data_prova.strftime('%d/%m')})")
+                data_prova=date.fromisoformat(dados.get("dia_prova",""))
+                dias=(data_prova-date.today()).days
+                if 0 <= dias <= 7:
+                    st.warning(f"⚠️ Prova {mat} em {dias} dias ({data_prova.strftime('%d/%m')}) - {dados.get('assunto_atual','')}")
             except: pass
 
-        # TIMER NO INÍCIO TAMBÉM
-        if st.session_state.timer_inicio and st.session_state.materia_em_estudo:
-            tempo = datetime.now() - st.session_state.timer_inicio
+        if st.session_state.timer_inicio:
+            tempo=datetime.now()-st.session_state.timer_inicio
             with st.container(border=True):
-                st.write(f"⏱️ **Estudando agora:** {st.session_state.materia_em_estudo}")
-                st.write(f"⏰ Tempo: {str(tempo).split('.')[0]}")
-                if st.button("Ir concluir estudo"): st.session_state.pagina="Acadêmico"; st.rerun()
+                st.write(f"⏱️ Estudando {st.session_state.materia_em_estudo} - {str(tempo).split('.')[0]}")
 
-        obj = usuario["areas"]["Estudos"].get("objetivo") or "seus estudos"
-        with st.container(border=True):
-            st.write(f"📅 Hoje, {date.today().strftime('%d/%m/%Y')}")
-            st.subheader(f"💬 Bora, {usuario['nome'].split()[0]}? Foco em: {obj}")
+        # SE TEM FOCO, MOSTRA SÓ ELE
+        materias_para_mostrar = usuario["areas"]["Estudos"]["materias"]
+        if usuario.get("foco_materia"):
+            materias_para_mostrar = {usuario["foco_materia"]: materias_para_mostrar.get(usuario["foco_materia"],{})}
 
-        st.subheader("Seus cartões")
-        for area_nome, dados_area in usuario["areas"].items():
+        st.subheader(f"Cartões {' - FOCO' if usuario.get('foco_materia') else ''}")
+        for mat, dados in materias_para_mostrar.items():
+            tarefas=[t for t in usuario["cronograma"] if t.get("materia")==mat]
+            feitos=sum(1 for i,t in enumerate(usuario["cronograma"]) if t.get("materia")==mat and f"tarefa_{i}" in usuario["progresso"])
             with st.container(border=True):
-                st.write(f"**{area_nome}** - 🎯 Objetivo: \"{dados_area.get('objetivo','')}\"")
-                for mat in dados_area.get("materias",{}).keys():
-                    tarefas_mat = [t for t in usuario["cronograma"] if t.get("materia")==mat]
-                    feitos_mat = sum(1 for i,t in enumerate(usuario["cronograma"]) if t.get("materia")==mat and f"tarefa_{i}" in usuario["progresso"])
-                    st.progress(feitos_mat/len(tarefas_mat) if tarefas_mat else 0, text=f"{mat}: {feitos_mat}/{len(tarefas_mat)} dias")
+                c1,c2,c3=st.columns([3,1,1])
+                with c1:
+                    st.write(f"**{mat}**")
+                    st.write(f"📌 Assunto do dia: {dados.get('assunto_dia', dados.get('assunto_atual',''))}")
+                    st.progress(feitos/len(tarefas) if tarefas else 0, text=f"{feitos}/{len(tarefas)} dias")
+                with c2:
+                    if st.button("✏️", key=f"e_{mat}"):
+                        st.session_state.pagina="Acadêmico"; st.rerun()
+                with c3:
+                    if st.button("▶️", key=f"p_{mat}"):
+                        st.session_state.pagina="Acadêmico"; st.rerun()
 
     elif st.session_state.pagina=="Config":
         st.header("⚙️ Perfil")
-        objetivo=st.text_input("Objetivo geral", value=usuario["areas"]["Estudos"].get("objetivo",""))
+        obj=st.text_input("Objetivo geral", value=usuario["areas"]["Estudos"].get("objetivo",""))
         if st.button("Salvar"):
-            USUARIOS[LOGADO]["areas"]["Estudos"]["objetivo"]=objetivo
-            salvar(); st.success("Salvo!")
+            USUARIOS[LOGADO]["areas"]["Estudos"]["objetivo"]=obj; salvar(); st.success("Salvo!")
 
     else:
         st.header("🎓 Acadêmico")
-        est = usuario["areas"]["Estudos"]
-
-        # AGORA 4 ABAS - TIMER EM CIMA + CHAT NOVO
-        tab_mat, tab_estudar, tab_chat, tab_resumo = st.tabs(["📚 Minhas Matérias","✏️ Estudar Agora","💬 Chat Dúvidas","📈 Resumo Geral"])
+        est=usuario["areas"]["Estudos"]
+        tab_mat, tab_estudar, tab_chat, tab_resumo = st.tabs(["📚 Disciplinas","✏️ Estudar","💬 Dúvidas","📈 Resumo Geral"])
 
         with tab_mat:
-            st.subheader("Adicionar matéria")
-            nome_materia = st.text_input("Nome da matéria", placeholder="Ex: Matemática", key="nova_mat_final2")
+            st.subheader("Registrar disciplinas")
+
+            # MODO FOCO - ESCOLHER 1 DISCIPLINA PRA FOCAR
+            if est.get("materias"):
+                st.write("**🎯 Quer focar só em uma disciplina?**")
+                foco_opcoes = ["Nenhum - ver todas"] + list(est["materias"].keys())
+                foco_sel = st.selectbox("Focar em:", foco_opcoes, index=0 if not usuario.get("foco_materia") else foco_opcoes.index(usuario["foco_materia"]) if usuario.get("foco_materia") in foco_opcoes else 0)
+                if st.button("Definir foco"):
+                    if foco_sel=="Nenhum - ver todas":
+                        USUARIOS[LOGADO]["foco_materia"]=None
+                    else:
+                        USUARIOS[LOGADO]["foco_materia"]=foco_sel
+                    salvar(); st.success(f"Foco definido: {foco_sel}"); st.rerun()
+
+            st.divider()
+            st.write("**Adicionar nova disciplina**")
+            nome_materia=st.text_input("Nome da disciplina", placeholder="Ex: Matemática", key="add_m")
             col1,col2=st.columns(2)
-            with col1: assunto=st.text_input("Assunto atual", placeholder="Ex: Bhaskara", key="assunto_final2")
-            with col2: dia_prova=st.date_input("Dia da prova", value=date.today()+timedelta(days=7), key="prova_final2")
+            with col1: assunto=st.text_input("Assunto geral", placeholder="Ex: Bhaskara", key="ass_g")
+            with col2: assunto_dia=st.text_input("Assunto do dia (hoje)", placeholder="Ex: Delta negativo", key="ass_dia")
+            col3,col4=st.columns(2)
+            with col3: dia_prova=st.date_input("Dia da prova", value=date.today()+timedelta(days=7))
+            with col4: carga=st.number_input("Meta dias",1,10,5, help="Ex: estudar 5 dias")
 
-            if st.button("Adicionar matéria", type="primary"):
-                if not nome_materia: st.warning("Digite o nome")
+            if st.button("Adicionar disciplina", type="primary", use_container_width=True):
+                if not nome_materia: st.warning("Nome obrigatório")
                 else:
-                    garantir(LOGADO)
                     USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][nome_materia]={
-                        "assunto_atual": assunto,
-                        "dia_prova": dia_prova.isoformat(),
-                        "semestre_passado": 6.0,
-                        "semestre_atual": 7.0,
-                        "meta_nota": 10.0
+                        "assunto_atual":assunto,
+                        "assunto_dia":assunto_dia or assunto,
+                        "dia_prova":dia_prova.isoformat(),
+                        "semestre_passado":6.0,
+                        "semestre_atual":7.0,
+                        "meta_nota":10.0,
+                        "meta_dias":carga
                     }
-                    for i in range(5):
-                        USUARIOS[LOGADO]["cronograma"].append({"area":"Estudos","materia": nome_materia,"dia": (date.today()+timedelta(days=i)).strftime('%d/%m'),"texto": f"{nome_materia}: {assunto}"})
-                    salvar(); st.success(f"{nome_materia} adicionada!"); st.rerun()
+                    for i in range(carga):
+                        USUARIOS[LOGADO]["cronograma"].append({"area":"Estudos","materia":nome_materia,"dia":(date.today()+timedelta(days=i)).strftime('%d/%m'),"texto":f"{nome_materia}: {assunto_dia or assunto}"})
+                    salvar(); st.success(f"{nome_materia} registrada!"); st.rerun()
 
-            for mat, dados in est.get("materias",{}).items():
+            st.divider()
+            st.subheader(f"Suas disciplinas ({len(est.get('materias',{}))}) - editar/deletar aqui")
+
+            for mat, dados in list(est.get("materias",{}).items()):
                 with st.container(border=True):
-                    st.write(f"**{mat}** - {dados.get('assunto_atual','')} - Prova {dados.get('dia_prova','')}")
+                    st.write(f"**{mat}** | Assunto geral: {dados.get('assunto_atual','')} | **Hoje: {dados.get('assunto_dia','')}** | Prova: {dados.get('dia_prova','')}")
+                    c1,c2,c3,c4=st.columns(4)
+                    with c1:
+                        if st.button("🎯 Focar", key=f"focar_{mat}"):
+                            USUARIOS[LOGADO]["foco_materia"]=mat; salvar(); st.rerun()
+                    with c2:
+                        if st.button("✏️ Editar", key=f"edit_{mat}"):
+                            st.session_state[f"editando_{mat}"]=True
+                    with c3:
+                        if st.button("🗑️ Deletar", key=f"del_{mat}"):
+                            del USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]
+                            USUARIOS[LOGADO]["cronograma"]=[t for t in USUARIOS[LOGADO]["cronograma"] if t.get("materia")!=mat]
+                            if USUARIOS[LOGADO].get("foco_materia")==mat: USUARIOS[LOGADO]["foco_materia"]=None
+                            salvar(); st.rerun()
+                    with c4:
+                        if st.button("▶️ Estudar", key=f"est_{mat}"):
+                            st.session_state.materia_em_estudo=mat
+                            st.session_state.timer_inicio=datetime.now()
+                            salvar(); st.rerun()
+
+                    if st.session_state.get(f"editando_{mat}", False):
+                        with st.form(f"form_{mat}"):
+                            st.write(f"Editando {mat}")
+                            novo_nome=st.text_input("Nome", value=mat)
+                            novo_assunto=st.text_input("Assunto geral", value=dados.get("assunto_atual",""))
+                            novo_assunto_dia=st.text_input("Assunto do dia", value=dados.get("assunto_dia",""))
+                            nova_data=st.date_input("Data prova", value=date.fromisoformat(dados.get("dia_prova",date.today().isoformat())))
+                            col_s1,col_s2=st.columns(2)
+                            with col_s1:
+                                if st.form_submit_button("Salvar"):
+                                    if novo_nome!=mat:
+                                        USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][novo_nome]=USUARIOS[LOGADO]["areas"]["Estudos"]["materias"].pop(mat)
+                                        mat=novo_nome
+                                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["assunto_atual"]=novo_assunto
+                                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["assunto_dia"]=novo_assunto_dia
+                                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["dia_prova"]=nova_data.isoformat()
+                                    st.session_state[f"editando_{mat}"]=False
+                                    salvar(); st.rerun()
+                            with col_s2:
+                                if st.form_submit_button("Cancelar"):
+                                    st.session_state[f"editando_{mat}"]=False
+                                    st.rerun()
 
         with tab_estudar:
-            if not est.get("materias"):
-                st.info("Adicione matéria primeiro")
+            materias_disponiveis = est.get("materias",{})
+            if usuario.get("foco_materia"):
+                materias_disponiveis = {usuario["foco_materia"]: materias_disponiveis.get(usuario["foco_materia"],{})}
+
+            if not materias_disponiveis: st.info("Registre disciplina primeiro")
             else:
-                # ===== TIMER EM CIMA AGORA =====
-                if st.session_state.timer_inicio and st.session_state.materia_em_estudo:
-                    tempo = datetime.now() - st.session_state.timer_inicio
+                # TIMER EM CIMA
+                if st.session_state.timer_inicio:
+                    tempo=datetime.now()-st.session_state.timer_inicio
                     with st.container(border=True):
-                        st.subheader(f"⏱️ ESTUDANDO AGORA: {st.session_state.materia_em_estudo}")
+                        st.subheader(f"⏱️ ESTUDANDO: {st.session_state.materia_em_estudo}")
                         st.title(f"{str(tempo).split('.')[0]}")
-                        st.caption(f"Assunto: {est['materias'][st.session_state.materia_em_estudo].get('assunto_atual','')}")
-                else:
-                    st.info("⏱️ Nenhum estudo em andamento. Escolha uma matéria abaixo e clique em Começar")
+                        st.write(f"Assunto do dia: {est['materias'][st.session_state.materia_em_estudo].get('assunto_dia','')}")
 
-                st.divider()
-                materia_sel=st.selectbox("Qual vai estudar?", list(est["materias"].keys()))
+                materia_sel=st.selectbox("Qual disciplina estudar?", list(materias_disponiveis.keys()))
 
-                dados_mat=est["materias"][materia_sel]
+                # Campo assunto do dia editável aqui também
+                assunto_dia_atual=st.text_input(f"Assunto do dia para {materia_sel}", value=materias_disponiveis[materia_sel].get("assunto_dia",""), key=f"ass_dia_est_{materia_sel}")
+                if st.button("Atualizar assunto do dia"):
+                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][materia_sel]["assunto_dia"]=assunto_dia_atual
+                    salvar(); st.success("Assunto do dia atualizado!")
 
                 if st.session_state.timer_inicio is None:
-                    if st.button(f"▶️ Começar a estudar {materia_sel} agora", type="primary", use_container_width=True):
+                    if st.button(f"▶️ Começar {materia_sel}", type="primary", use_container_width=True):
                         st.session_state.timer_inicio=datetime.now()
                         st.session_state.materia_em_estudo=materia_sel
                         st.rerun()
                 else:
-                    # Se já tem timer, mostra botão concluir
-                    resumo=st.text_area("✍️ O que você aprendeu até agora?", placeholder="Ex: Aprendi Bhaskara...", key=f"resumo_{materia_sel}", height=120)
-
-                    col1,col2=st.columns(2)
-                    with col1:
-                        if st.button("⏹️ Parar tempo e concluir", type="primary", use_container_width=True):
-                            if not resumo.strip(): st.warning("Escreve o que aprendeu!")
-                            else:
-                                tempo = datetime.now() - st.session_state.timer_inicio
-                                tempo_min = int(tempo.total_seconds()/60) if tempo.total_seconds()>60 else 1
-                                for i,t in enumerate(USUARIOS[LOGADO]["cronograma"]):
-                                    if t.get("materia")==materia_sel and f"tarefa_{i}" not in USUARIOS[LOGADO]["progresso"]:
-                                        USUARIOS[LOGADO]["progresso"][f"tarefa_{i}"]={"feito":True,"tempo_min":tempo_min,"resumo":resumo,"data":date.today().isoformat()}
-                                        USUARIOS[LOGADO]["tempo_total_mes"]=USUARIOS[LOGADO].get("tempo_total_mes",0)+tempo_min
-                                        break
-                                st.session_state.timer_inicio=None
-                                st.session_state.materia_em_estudo=None
-                                salvar()
-                                st.balloons()
-                                st.success(f"✅ {tempo_min} min salvos! Progresso de {materia_sel} atualizado")
-                                st.rerun()
-                    with col2:
-                        if st.button("Cancelar estudo", use_container_width=True):
-                            st.session_state.timer_inicio=None
-                            st.session_state.materia_em_estudo=None
-                            st.rerun()
+                    resumo=st.text_area("O que aprendeu?", key=f"res_{materia_sel}")
+                    if st.button("⏹️ Parar e concluir", type="primary", use_container_width=True):
+                        if not resumo.strip(): st.warning("Escreve")
+                        else:
+                            tempo=datetime.now()-st.session_state.timer_inicio
+                            tempo_min=int(tempo.total_seconds()/60) if tempo.total_seconds()>60 else 1
+                            for i,t in enumerate(USUARIOS[LOGADO]["cronograma"]):
+                                if t.get("materia")==materia_sel and f"tarefa_{i}" not in USUARIOS[LOGADO]["progresso"]:
+                                    USUARIOS[LOGADO]["progresso"][f"tarefa_{i}"]={"feito":True,"tempo_min":tempo_min,"resumo":resumo,"data":date.today().isoformat()}
+                                    USUARIOS[LOGADO]["tempo_total_mes"]+=tempo_min
+                                    break
+                            st.session_state.timer_inicio=None; st.session_state.materia_em_estudo=None
+                            salvar(); st.balloons(); st.success(f"{tempo_min} min salvos!"); st.rerun()
 
                 st.divider()
-                # IA PREPAROU AGORA FICA EMBAIXO DO TIMER
-                st.subheader(f"📚 IA preparou para {materia_sel}")
-                st.info(f"Resumo: {materia_sel} - {dados_mat.get('assunto_atual','')} - estude conceito + exercício")
-                st.link_button(f"🎥 Vídeos {materia_sel}", f"https://www.youtube.com/results?search_query={materia_sel}+{dados_mat.get('assunto_atual','')}")
-                st.link_button(f"📄 PDF {materia_sel}", f"https://www.google.com/search?q={materia_sel}+pdf+gratis")
+                st.info(f"📚 IA preparou para {materia_sel}: {materias_disponiveis[materia_sel].get('assunto_dia','')}")
+                st.link_button("🎥 Vídeos", f"https://www.youtube.com/results?search_query={materia_sel}+{assunto_dia_atual}")
 
         with tab_chat:
-            st.subheader(f"💬 Chat de dúvidas - {usuario['nome'].split()[0]}")
-            st.caption("Ex: Tirei 7 em Matemática, errei questão sobre Bhaskara com delta negativo, explica?")
+            st.subheader("💬 Chat dúvidas com fontes")
+            materia_chat=st.selectbox("Matéria da dúvida", list(est.get("materias",{}).keys())+["Geral"], key="mc")
 
-            materia_chat = st.selectbox("Matéria da dúvida", list(est.get("materias",{}).keys()) + ["Geral"])
-
-            # Mostra histórico
             for chat in usuario.get("chat_duvidas",[]):
                 with st.chat_message(chat["role"]):
-                    st.write(chat["content"])
+                    st.markdown(chat["content"])
 
-            duvida = st.chat_input(f"Digite sua dúvida de {materia_chat}... Ex: errei questão X")
-
+            duvida=st.chat_input(f"Dúvida de {materia_chat}...")
             if duvida:
-                # Salva pergunta
-                USUARIOS[LOGADO]["chat_duvidas"].append({"role":"user","content": f"[{materia_chat}] {duvida}"})
+                USUARIOS[LOGADO]["chat_duvidas"].append({"role":"user","content":f"[{materia_chat}] {duvida}"})
+                query=f"{materia_chat}+{duvida}".replace(" ","+")
+                link_g=f"https://www.google.com/search?q={query}"
+                link_y=f"https://www.youtube.com/results?search_query={query}"
+                resposta=f"""
+**Dúvida:** {duvida}
 
-                # SIMULA PESQUISA NA WEB + RESPOSTA DA IA
-                # Aqui depois você pode conectar com API real, por enquanto faz explicação inteligente
-                if "tirei" in duvida.lower() or "errei" in duvida.lower() or "7" in duvida:
-                    resposta = f"""Entendi! Você mandou: **{duvida}**
+**Explicação clara:**
+Em {materia_chat}, sobre {est.get('materias',{}).get(materia_chat,{}).get('assunto_dia','')}, isso acontece porque...
 
-Sobre **{materia_chat}**:
+**Passo a passo:**
+1. Conceito
+2. Exemplo
+3. Como não errar mais
 
-🔍 **O que a web diz:**
-Pesquisei aqui: Esse erro é comum quando {duvida[:30]}...
-
-✅ **Explicação simples:**
-1. O conceito de {est.get('materias',{}).get(materia_chat,{}).get('assunto_atual','essa matéria')} tem um detalhe que muita gente erra
-2. Quando delta é negativo, não tem raiz real - por isso você errou
-3. Pra tirar 10 na próxima: faça 3 exercícios só desse tipo
-
-🎥 **Recomendo:**
-- Vídeo: {materia_chat} - erros comuns
-- PDF: exercícios resolvidos de {materia_chat}
-
-Quer que eu monte 3 questões pra você praticar agora sobre isso?
+---
+**🔗 Fontes:**
+1. Google: {link_g}
+2. YouTube: {link_y}
 """
-                else:
-                    resposta = f"""Boa pergunta sobre **{materia_chat}**!
-
-**{duvida}**
-
-📚 Resposta rápida:
-O assunto {est.get('materias',{}).get(materia_chat,{}).get('assunto_atual','')} funciona assim: [explicação da IA aqui]
-
-🔗 **Pesquisei na web pra você:**
-- Melhor explicação: https://www.google.com/search?q={materia_chat}+{duvida.replace(' ','+')}+explicação
-- Vídeo aula: https://www.youtube.com/results?search_query={materia_chat}+{duvida.replace(' ','+')}
-
-Quer que eu explique de outro jeito?
-"""
-
-                USUARIOS[LOGADO]["chat_duvidas"].append({"role":"assistant","content": resposta})
-                salvar()
-                st.rerun()
-
-            if st.button("Limpar chat"):
-                USUARIOS[LOGADO]["chat_duvidas"]=[]
+                USUARIOS[LOGADO]["chat_duvidas"].append({"role":"assistant","content":resposta})
                 salvar(); st.rerun()
 
         with tab_resumo:
-            st.subheader("📈 Tempo de estudo")
-            st.metric("Total mês", f"{usuario.get('tempo_total_mes',0)} min")
-            st.bar_chart({"Passado": 120, "Atual": usuario.get('tempo_total_mes',0)})
+            st.subheader("📈 Resumo geral - escolha a matéria")
 
-            st.divider()
-            for mat, dados in est.get("materias",{}).items():
+            if not est.get("materias"):
+                st.info("Nenhuma disciplina registrada")
+            else:
+                # ESCOLHER POR MATÉRIA - NÃO FICA MUITA ABA
+                mat_sel_resumo=st.selectbox("Selecione a disciplina para ver resumo", list(est["materias"].keys()), key="resumo_mat_sel")
+
+                dados=est["materias"][mat_sel_resumo]
+                tarefas=[t for t in usuario["cronograma"] if t.get("materia")==mat_sel_resumo]
+                feitos=sum(1 for i,t in enumerate(usuario["cronograma"]) if t.get("materia")==mat_sel_resumo and f"tarefa_{i}" in usuario["progresso"])
+
                 with st.container(border=True):
-                    st.write(f"**{mat}**")
-                    c1,c2,c3=st.columns(3)
-                    with c1: np=st.number_input(f"Sem passado {mat}",0.0,10.0,float(dados.get("semestre_passado",6.0)),key=f"npf2_{mat}")
-                    with c2: na=st.number_input(f"Sem atual {mat}",0.0,10.0,float(dados.get("semestre_atual",7.0)),key=f"naf2_{mat}")
-                    with c3: mn=st.number_input(f"Meta {mat}",0.0,10.0,float(dados.get("meta_nota",10.0)),key=f"mnf2_{mat}")
+                    st.write(f"**{mat_sel_resumo}**")
+                    st.write(f"Assunto geral: {dados.get('assunto_atual','')} | Hoje: {dados.get('assunto_dia','')}")
+                    st.progress(feitos/len(tarefas) if tarefas else 0, text=f"Progresso: {feitos}/{len(tarefas)} dias concluídos")
 
-                    if na >= mn: st.success("🏆 Meta atingida!")
-                    else:
-                        falta=mn-na
-                        if falta <=1: plano=f"Revise {dados.get('assunto_atual','')} 30min/dia"
-                        elif falta <=3: plano=f"Estude {mat} 1h extra + simulados"
-                        else: plano=f"Foco total {mat}: 2h/dia"
-                        st.warning(f"{np} → {na} | {plano}")
+                    # Tempo dessa matéria
+                    tempo_mat=sum(v.get("tempo_min",0) for i,v in usuario["progresso"].items() if usuario["cronograma"][int(i.split('_')[1])].get("materia")==mat_sel_resumo) if usuario["progresso"] else 0
+                    st.metric("Tempo estudado nessa matéria (mês)", f"{tempo_mat} min")
 
-                    if st.button(f"Salvar {mat}", key=f"saven2_{mat}"):
-                        USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["semestre_passado"]=np
-                        USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["semestre_atual"]=na
-                        USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat]["meta_nota"]=mn
-                        salvar(); st.success("Salvo!")
+                st.divider()
+                st.write(f"**Notas - {mat_sel_resumo}**")
+                c1,c2,c3=st.columns(3)
+                with c1: np=st.number_input("Semestre passado",0.0,10.0,float(dados.get("semestre_passado",6.0)),key=f"np_{mat_sel_resumo}")
+                with c2: na=st.number_input("Semestre atual",0.0,10.0,float(dados.get("semestre_atual",7.0)),key=f"na_{mat_sel_resumo}")
+                with c3: mn=st.number_input("Meta",0.0,10.0,float(dados.get("meta_nota",10.0)),key=f"mn_{mat_sel_resumo}")
+
+                evo=na-np
+                if na>=mn:
+                    st.success(f"🏆 Meta atingida em {mat_sel_resumo}!")
+                else:
+                    falta=mn-na
+                    if falta<=1: plano=f"Revise {dados.get('assunto_dia','')} 30min/dia"
+                    elif falta<=3: plano=f"Estude {mat_sel_resumo} 1h extra + exercícios"
+                    else: plano=f"Foco total: 2h/dia em {mat_sel_resumo}"
+                    st.warning(f"Evolução: {np} → {na} ({evo:+.1f}) | {plano}")
+
+                if st.button(f"Salvar notas {mat_sel_resumo}", use_container_width=True):
+                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat_sel_resumo]["semestre_passado"]=np
+                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat_sel_resumo]["semestre_atual"]=na
+                    USUARIOS[LOGADO]["areas"]["Estudos"]["materias"][mat_sel_resumo]["meta_nota"]=mn
+                    salvar(); st.success("Notas salvas!")
+
+                st.divider()
+                st.subheader("Comparação geral de todas as matérias")
+                if len(est["materias"])>1:
+                    dados_graf={}
+                    for m,d in est["materias"].items():
+                        dados_graf[m]=[d.get("semestre_passado",0), d.get("semestre_atual",0)]
+                    st.bar_chart(dados_graf)
